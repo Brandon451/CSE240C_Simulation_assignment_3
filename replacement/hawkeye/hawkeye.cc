@@ -42,6 +42,7 @@ bool prefetched[LLC_SETS][LLC_WAYS];
 #define MAX_SHCT 31
 #define SHCT_SIZE_BITS 12
 #define SHCT_SIZE (1 << SHCT_SIZE_BITS)
+#define SHCT_SIZE_hawkeye (1 << SHCT_SIZE_BITS)
 #include "hawkeye_predictor.h"
 HAWKEYE_PC_PREDICTOR* demand_predictor;   // Predictor
 HAWKEYE_PC_PREDICTOR* prefetch_predictor; // Predictor
@@ -88,6 +89,8 @@ void CACHE::initialize_replacement()
   cout << "Initialize Hawkeye state" << endl;
 }
 
+//-----------------------------------------------------------------
+
 // find replacement victim
 // return value should be 0 ~ 15 or 16 (bypass)
 uint32_t CACHE::find_victim(uint32_t cpu, uint64_t instr_id, uint32_t set, const BLOCK* current_set, uint64_t PC, uint64_t paddr, uint32_t type)
@@ -121,8 +124,6 @@ uint32_t CACHE::find_victim(uint32_t cpu, uint64_t instr_id, uint32_t set, const
   assert(0);
   return 0;
 }
-
-//-----------------------------------------------------------------
 
 void replace_addr_history_element(unsigned int sampler_set)
 {
