@@ -6,7 +6,7 @@
 #include <map>
 
 #define NUM_CORE 1
-#define LLC_SETS 2048
+#define LLC_SETS 8192
 #define LLC_WAYS 16
 
 #define SAT_INC(x, max) (x < max) ? x + 1 : x
@@ -17,15 +17,11 @@
 #define RRIP_OVERRIDE_PERC 0
 
 // 3-bit RRIP counters or all lines
-#define maxRRPV_hawkeye 3//7
+#define maxRRPV_hawkeye 7
 uint32_t rrpv_hawkeye[LLC_SETS][LLC_WAYS];
 
 // The base policy is SRRIP. SHIP needs the following on a per-line basis
 #define maxRRPV_shippp 3
-
-#define maxRRPV 3
-uint32_t rrpv[LLC_SETS][LLC_WAYS];
-
 uint32_t line_rrpv[LLC_SETS][LLC_WAYS];
 uint32_t is_prefetch[LLC_SETS][LLC_WAYS];
 uint32_t fill_core[LLC_SETS][LLC_WAYS];
@@ -46,8 +42,6 @@ bool prefetched[LLC_SETS][LLC_WAYS];
 uint32_t ship_sample[LLC_SETS];
 uint32_t line_reuse[LLC_SETS][LLC_WAYS];
 uint64_t line_sig[LLC_SETS][LLC_WAYS];
-
-uint32_t hawkeye_sample[LLC_SETS];
 
 // Hawkeye Predictors for demand and prefetch requests
 // Predictor with 2K entries and 5-bit counter per entry
@@ -71,8 +65,7 @@ uint32_t SHCT[NUM_CORE][SHCT_SIZE_shippp];
 OPTgen perset_optgen[LLC_SETS]; // per-set occupancy vectors; we only use 64 of these
 
 // Statistics
-// uint64_t insertion_distrib[NUM_TYPES][maxRRPV_shippp + 1];
-uint64_t insertion_distrib[NUM_TYPES][maxRRPV + 1];
+uint64_t insertion_distrib[NUM_TYPES][maxRRPV_shippp + 1];
 uint64_t total_prefetch_downgrades;
 
 #include <math.h>
@@ -83,42 +76,28 @@ uint64_t total_prefetch_downgrades;
 
 // Sampler to track 8x cache history for sampled sets
 // 2800 entris * 4 bytes per entry = 11.2KB
-#define SAMPLED_CACHE_SIZE 1400//2800
+#define SAMPLED_CACHE_SIZE 2800
 #define SAMPLER_WAYS 8
 #define SAMPLER_SETS SAMPLED_CACHE_SIZE / SAMPLER_WAYS
 vector<map<uint64_t, ADDR_INFO>> addr_history; // Sampler
 
-#define maxCNTRval 0x3FF
+#define maxCNTRval 0xFFFF
 
 uint32_t select_sat_counter = maxCNTRval/2;
-uint32_t hysteresis = 0xF;
+uint32_t hysteresis = 128;
 uint32_t hysteresis_check = 0; 
-
-uint32_t shippp_misses = 0;
-uint32_t hawkeye_misses = 0;
 
 // initialize replacement state hawkeye
 void initialize_replacement_hawkeye()
 {
     for (int i = 0; i < LLC_SETS; i++) {
         for (int j = 0; j < LLC_WAYS; j++) {
-            rrpv[i][j] = maxRRPV;
-            //rrpv_hawkeye[i][j] = maxRRPV_hawkeye;
+            rrpv_hawkeye[i][j] = maxRRPV_hawkeye;
             signatures[i][j] = 0;
             prefetched[i][j] = false;
         }
         perset_mytimer[i] = 0;
         perset_optgen[i].init(LLC_WAYS - 2);
-    }
-
-    for (unsigned int i = 0; i < LLC_SETS; i++) {
-        //cout << ((~i>>6) & 0x1F) << " " << (i & 0x1F) << endl;
-        if (((i>>6) & 0x1F) == (i & 0x1F)) {
-            //cout << "Hawkeye " << i << endl;
-            hawkeye_sample[i] = 1;
-        }
-        //if (((~i>>6) & 0x1F) == (i & 0x1F))
-            //cout << "Ship++ " << i << endl;
     }
 
     addr_history.resize(SAMPLER_SETS);
@@ -140,8 +119,7 @@ void initialize_replacement_shippp(uint32_t NUM_SET)
 
     for (int i = 0; i < LLC_SETS; i++) {
         for (int j = 0; j < LLC_WAYS; j++) {
-            //line_rrpv[i][j] = maxRRPV_shippp;
-            rrpv[i][j] = maxRRPV;
+            line_rrpv[i][j] = maxRRPV_shippp;
             line_reuse[i][j] = FALSE;
             is_prefetch[i][j] = FALSE;
             line_sig[i][j] = 0;
@@ -156,52 +134,36 @@ void initialize_replacement_shippp(uint32_t NUM_SET)
 
     int leaders = 0;
 
-    for (unsigned int i = 0; i < LLC_SETS; i++) {
-        //cout << ((~i>>6) & 0x1F) << " " << (i & 0x1F) << endl;
-        // if (((i>>6) & 0x1F) == (i & 0x1F)) {
-        //     //cout << "Hawkeye " << i << endl;
-        //     hawkeye_sample[i] = 1;
-        // }
-        if (((~i>>6) & 0x1F) == (i & 0x1F)) {
-            ship_sample[i] = 1;
-            //cout << "Ship++ " << i << endl;
+    while (leaders < NUM_LEADER_SETS) {
+        int randval = rand() % NUM_SET;
+
+        if (ship_sample[randval] == 0 && SAMPLED_SET(randval) == 0) {
+            ship_sample[randval] = 1;
+            leaders++;
         }
     }
-
-    // while (leaders < NUM_LEADER_SETS) {
-    //     int randval = rand() % NUM_SET;
-
-    //     if (ship_sample[randval] == 0 && SAMPLED_SET(randval) == 0) {
-    //         ship_sample[randval] = 1;
-    //         leaders++;
-    //     }
-    // }
 }
 
 uint32_t find_victim_hawkeye(uint32_t cpu, uint64_t instr_id, uint32_t set, const BLOCK* current_set, uint64_t PC, uint64_t paddr, uint32_t type)
 {
     // look for the maxRRPV line
     for (uint32_t i = 0; i < LLC_WAYS; i++)
-        // if (rrpv_hawkeye[set][i] == maxRRPV_hawkeye)
-        if (rrpv[set][i] == maxRRPV)
+        if (rrpv_hawkeye[set][i] == maxRRPV_hawkeye)
             return i;
 
     // If we cannot find a cache-averse line, we evict the oldest cache-friendly line
     uint32_t max_rrip = 0;
     int32_t lru_victim = -1;
     for (uint32_t i = 0; i < LLC_WAYS; i++) {
-        // if (rrpv_hawkeye[set][i] >= max_rrip) {
-        if (rrpv[set][i] >= max_rrip) {
-            // max_rrip = rrpv_hawkeye[set][i];
-            max_rrip = rrpv[set][i];
+        if (rrpv_hawkeye[set][i] >= max_rrip) {
+            max_rrip = rrpv_hawkeye[set][i];
             lru_victim = i;
         }
     }
 
     assert(lru_victim != -1);
     // The predictor is trained negatively on LRU evictions
-    //if (SAMPLED_SET(set)) {
-    if (hawkeye_sample[set]) {
+    if (SAMPLED_SET(set)) {
         if (prefetched[set][lru_victim])
             prefetch_predictor->decrement(signatures[set][lru_victim]);
         else
@@ -219,14 +181,12 @@ uint32_t find_victim_shippp(uint32_t cpu, uint64_t instr_id, uint32_t set, const
     // look for the maxRRPV line
     while (1) {
         for (int i = 0; i < LLC_WAYS; i++)
-            // if (line_rrpv[set][i] == maxRRPV_shippp) { // found victim
-            if (rrpv[set][i] == maxRRPV) { // found victim
+            if (line_rrpv[set][i] == maxRRPV_shippp) { // found victim
             return i;
         }
 
         for (int i = 0; i < LLC_WAYS; i++)
-            //line_rrpv[set][i]++;
-            rrpv[set][i]++;
+            line_rrpv[set][i]++;
     }
 
     // WE SHOULD NOT REACH HERE
@@ -278,8 +238,7 @@ void update_replacement_state_hawkeye(uint32_t cpu, uint32_t set, uint32_t way, 
         return;
 
     // If we are sampling, OPTgen will only see accesses from sampled sets
-    //if (SAMPLED_SET(set)) {
-    if (hawkeye_sample[set]) {
+    if (SAMPLED_SET(set)) {
         // The current timestep
         uint64_t curr_quanta = perset_mytimer[set] % OPTGEN_VECTOR_SIZE;
 
@@ -376,28 +335,22 @@ void update_replacement_state_hawkeye(uint32_t cpu, uint32_t set, uint32_t way, 
 
     // Set RRIP values and age cache-friendly line
     if (!new_prediction)
-        // rrpv_hawkeye[set][way] = maxRRPV_hawkeye;
-        rrpv[set][way] = maxRRPV;
+        rrpv_hawkeye[set][way] = maxRRPV_hawkeye;
     else {
         rrpv_hawkeye[set][way] = 0;
-        rrpv[set][way] = 0;
         if (!hit) {
             bool saturated = false;
             for (uint32_t i = 0; i < LLC_WAYS; i++)
-                // if (rrpv_hawkeye[set][i] == maxRRPV_hawkeye - 1)
-                if (rrpv[set][i] == maxRRPV - 1)
+                if (rrpv_hawkeye[set][i] == maxRRPV_hawkeye - 1)
             saturated = true;
 
             // Age all the cache-friendly  lines
             for (uint32_t i = 0; i < LLC_WAYS; i++) {
-                // if (!saturated && rrpv_hawkeye[set][i] < maxRRPV_hawkeye - 1)
-                if (!saturated && rrpv[set][i] < maxRRPV - 1)
-                    // rrpv_hawkeye[set][i]++;
-                    rrpv[set][i]++;
+                if (!saturated && rrpv_hawkeye[set][i] < maxRRPV_hawkeye - 1)
+                    rrpv_hawkeye[set][i]++;
             }
         }
-        // rrpv_hawkeye[set][way] = 0;
-        rrpv[set][way] = 0;
+        rrpv_hawkeye[set][way] = 0;
     }
 }
 
@@ -420,12 +373,10 @@ void update_replacement_state_shippp(uint32_t cpu, uint32_t set, uint32_t way, u
                 }
             }
             else {
-                // line_rrpv[set][way] = 0;
-                rrpv[set][way] = 0;
+                line_rrpv[set][way] = 0;
 
                 if (is_prefetch[set][way]) {
-                    //line_rrpv[set][way] = maxRRPV_shippp;
-                    rrpv[set][way] = maxRRPV;
+                    line_rrpv[set][way] = maxRRPV_shippp;
                     is_prefetch[set][way] = FALSE;
                     total_prefetch_downgrades++;
                 }
@@ -467,148 +418,81 @@ void update_replacement_state_shippp(uint32_t cpu, uint32_t set, uint32_t way, u
 
     // Now determine the insertion prediciton
 
-    // uint32_t priority_RRPV = maxRRPV_shippp - 1; // default SHIP
-    uint32_t priority_RRPV = maxRRPV - 1; // default SHIP
+    uint32_t priority_RRPV = maxRRPV_shippp - 1; // default SHIP
 
     if (type == WRITEBACK) {
-        // line_rrpv[set][way] = maxRRPV_shippp;
-        rrpv[set][way] = maxRRPV;
+        line_rrpv[set][way] = maxRRPV_shippp;
     } else if (SHCT[cpu][new_sig] == 0) {
-        // line_rrpv[set][way] = (rand() % 100 >= RRIP_OVERRIDE_PERC) ? maxRRPV_shippp : priority_RRPV; // LowPriorityInstallMostly
-        rrpv[set][way] = (rand() % 100 >= RRIP_OVERRIDE_PERC) ? maxRRPV : priority_RRPV; // LowPriorityInstallMostly
+        line_rrpv[set][way] = (rand() % 100 >= RRIP_OVERRIDE_PERC) ? maxRRPV_shippp : priority_RRPV; // LowPriorityInstallMostly
     } else if (SHCT[cpu][new_sig] == maxSHCTR) {
-        // line_rrpv[set][way] = (type == PREFETCH) ? 1 : 0; // HighPriority Install
-        rrpv[set][way] = (type == PREFETCH) ? 1 : 0; // HighPriority Install
+        line_rrpv[set][way] = (type == PREFETCH) ? 1 : 0; // HighPriority Install
     } else {
-        // line_rrpv[set][way] = priority_RRPV; // HighPriority Install
-        rrpv[set][way] = priority_RRPV; // HighPriority Install
+        line_rrpv[set][way] = priority_RRPV; // HighPriority Install
     }
 
     // Stat tracking for what insertion it was at
-    // insertion_distrib[type][line_rrpv[set][way]]++;
-    insertion_distrib[type][rrpv[set][way]]++;
+    insertion_distrib[type][line_rrpv[set][way]]++;
 }
 
 void CACHE::initialize_replacement() {
-
-    cout << "5th iteration" << std::endl;
-    cout << "No hysteresis, common rrpv" << std::endl;
-
     initialize_replacement_hawkeye();
     initialize_replacement_shippp(NUM_SET);
-    //cout << "NUM_SETs: " << NUM_SET << std::endl;
-    //cout << "NUM_WAYs: " << NUM_WAY << std::endl;
 }
-
-// uint32_t CACHE::find_victim(uint32_t cpu, uint64_t instr_id, uint32_t set, const BLOCK* current_set, uint64_t PC, uint64_t paddr, uint32_t type) {
-    
-//     uint32_t select_val = 0;
-//     uint32_t victim_val = 0;
-
-//     if (hawkeye_sample[set] == 1) select_val = 1;  //Hawkeye sampled cache line
-//     else if (ship_sample[set] == 1) select_val = 0; //Ship++ sampled cache line
-//     else {
-//         //if (select_sat_counter < (maxCNTRval/2) - (hysteresis/2)) select_val = 0;
-//         if (select_sat_counter < (maxCNTRval/2)) select_val = 0;
-//         //else if (select_sat_counter > (maxCNTRval/2) + (hysteresis/2) + 1) select_val = 1;
-//         else if (select_sat_counter >= (maxCNTRval/2)) select_val = 1;
-//         //else {
-//         //    if (hysteresis_check == 0) select_val = 0;
-//         //    else select_val = 1;
-//         //}
-//     }
-
-//     if (select_val == 1) victim_val = find_victim_hawkeye(cpu, instr_id, set, current_set, PC, paddr, type);
-//     else victim_val = find_victim_shippp(cpu, instr_id, set, current_set, PC, paddr, type);
-
-//     //std::cout << "Prediction: " << select_val << std::endl;
-
-//     return victim_val;
-// }
-
-// void CACHE::update_replacement_state(uint32_t cpu, uint32_t set, uint32_t way, uint64_t full_addr, uint64_t ip, uint64_t victim_addr, uint32_t type, uint8_t hit) {
-    
-//     uint32_t select_val = 0;
-
-//     if (hawkeye_sample[set] == 1) select_val = 1;  //Hawkeye sampled cache line
-//     else if (ship_sample[set] == 1) select_val = 0; //Ship++ sampled cache line
-//     else select_val = 2;
-
-//     if (select_val == 0) {
-//         if (select_sat_counter > 0) {
-//             if (hit == 0) {
-//                 select_sat_counter+=1;
-//             }
-//             //if (select_sat_counter > (maxCNTRval/2) + (hysteresis/2) + 1) {
-//             //    hysteresis_check = 1;
-//             //}
-//             //else hysteresis_check = 0;
-//         }
-//         update_replacement_state_shippp(cpu, set, way, full_addr, ip, victim_addr, type, hit);
-//     }
-//     else if (select_val == 1) {
-//         if (select_sat_counter < maxCNTRval) {
-//             if (hit == 0) {
-//                 select_sat_counter-=1;
-//             }
-//             //if (select_sat_counter < (maxCNTRval/2) - (hysteresis/2)) {
-//             //    hysteresis_check = 0;
-//             //}
-//             //else hysteresis_check = 1;
-//         }
-//         update_replacement_state_shippp(cpu, set, way, full_addr, ip, victim_addr, type, hit);
-//     }
-
-//     //std::cout << "Counter: " << select_sat_counter << std::endl;
-// }
 
 uint32_t CACHE::find_victim(uint32_t cpu, uint64_t instr_id, uint32_t set, const BLOCK* current_set, uint64_t PC, uint64_t paddr, uint32_t type) {
     
-    if (hawkeye_sample[set] == 1) return find_victim_hawkeye(cpu, instr_id, set, current_set, PC, paddr, type);
-    else if (ship_sample[set] == 1) return find_victim_shippp(cpu, instr_id, set, current_set, PC, paddr, type);
+    if (SAMPLED_SET(set)) return find_victim_hawkeye(cpu, instr_id, set, current_set, PC, paddr, type);  //Hawkeye sampled cache line
+    else if (ship_sample[set]) return find_victim_shippp(cpu, instr_id, set, current_set, PC, paddr, type); //Ship++ sampled cache line
     else {
         if (select_sat_counter < (maxCNTRval/2)) return find_victim_shippp(cpu, instr_id, set, current_set, PC, paddr, type);
         else return find_victim_hawkeye(cpu, instr_id, set, current_set, PC, paddr, type);
     }
-
-    // else {
-    //     if (select_sat_counter < (maxCNTRval/2) - hysteresis) return find_victim_shippp(cpu, instr_id, set, current_set, PC, paddr, type);
-    //     else if (select_sat_counter > (maxCNTRval/2) + hysteresis) return find_victim_hawkeye(cpu, instr_id, set, current_set, PC, paddr, type);
-    //     else {
-    //         if (hysteresis_check) return find_victim_hawkeye(cpu, instr_id, set, current_set, PC, paddr, type);
-    //         else return find_victim_shippp(cpu, instr_id, set, current_set, PC, paddr, type);
-    //     }
-    // }
-
 }
 
 void CACHE::update_replacement_state(uint32_t cpu, uint32_t set, uint32_t way, uint64_t full_addr, uint64_t ip, uint64_t victim_addr, uint32_t type, uint8_t hit) {
+    
+    //if (SAMPLED_SET(set) == 1) select_val = 1;  //Hawkeye sampled cache line
+    //else if (ship_sample[set] == 1) select_val = 0; //Ship++ sampled cache line
+    //else select_val = 2;
 
-    // if (!hawkeye_sample[set]) update_replacement_state_shippp(cpu, set, way, full_addr, ip, victim_addr, type, hit);
-    // if (!ship_sample[set]) update_replacement_state_hawkeye(cpu, set, way, full_addr, ip, victim_addr, type, hit);
+    //if (select_val == 0) {
+    //    if (select_sat_counter > 0) {
+    //        if (hit == 0) {
+    //            select_sat_counter+=1;
+    //        }
+    //        if (select_sat_counter > (maxCNTRval/2) + (hysteresis/2) + 1) {
+    //            hysteresis_check = 1;
+    //        }
+    //        else hysteresis_check = 0;
+    //    }
+    //    update_replacement_state_shippp(cpu, set, way, full_addr, ip, victim_addr, type, hit);
+    //}
+    //else if (select_val == 1) {
+    //    if (select_sat_counter < maxCNTRval) {
+    //        if (hit == 0) {
+    //            select_sat_counter-=1;
+    //        }
+    //        if (select_sat_counter < (maxCNTRval/2) - (hysteresis/2)) {
+    //            hysteresis_check = 0;
+    //        }
+    //        else hysteresis_check = 1;
+    //    }
+    //    update_replacement_state_shippp(cpu, set, way, full_addr, ip, victim_addr, type, hit);
+    //}
 
-    if (hawkeye_sample[set] == 1) update_replacement_state_hawkeye(cpu, set, way, full_addr, ip, victim_addr, type, hit);
-    else if (ship_sample[set] == 1) update_replacement_state_shippp(cpu, set, way, full_addr, ip, victim_addr, type, hit);
-    else {
-        if (select_sat_counter < (maxCNTRval/2)) update_replacement_state_shippp(cpu, set, way, full_addr, ip, victim_addr, type, hit);
-        else update_replacement_state_hawkeye(cpu, set, way, full_addr, ip, victim_addr, type, hit);
-    }
+	if (!SAMPLED_SET(set)) update_replacement_state_shippp(cpu, set, way, full_addr, ip, victim_addr, type, hit);
+    	if (!ship_sample[set]) update_replacement_state_hawkeye(cpu, set, way, full_addr, ip, victim_addr, type, hit);
 
-    if (hit == 0) {
-        if (hawkeye_sample[set] && select_sat_counter > 0) {
-            select_sat_counter--;
-            //if (select_sat_counter < (maxCNTRval/2) - hysteresis) hysteresis_check = 0;
-        }
-        else if (ship_sample[set] && select_sat_counter < maxCNTRval) {
-            select_sat_counter++;
-            //if (select_sat_counter > (maxCNTRval/2) + hysteresis) hysteresis_check = 1;
-        }
-    }
-
-    if (!hit && hawkeye_sample[set]) hawkeye_misses++;
-    if (!hit && ship_sample[set]) shippp_misses++;
-
-    //std::cout << "Ship++ misses: " << shippp_misses << ", " << "Hawkeye misses: " << hawkeye_misses << ", " << "Counter: " << select_sat_counter << std::endl;
+    	if (hit == 0) {
+        	if (SAMPLED_SET(set) && select_sat_counter > 0) {
+            		select_sat_counter--;
+            		//if (select_sat_counter < (maxCNTRval/2) - hysteresis) hysteresis_check = 0;
+        	}
+        	else if (ship_sample[set] && select_sat_counter < maxCNTRval) {
+            		select_sat_counter++;
+            		//if (select_sat_counter > (maxCNTRval/2) + hysteresis) hysteresis_check = 1;
+        	}
+    	}
 }
 
 void CACHE::replacement_final_stats() {}

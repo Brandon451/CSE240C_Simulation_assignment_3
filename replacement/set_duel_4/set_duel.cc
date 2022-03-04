@@ -91,7 +91,6 @@ vector<map<uint64_t, ADDR_INFO>> addr_history; // Sampler
 #define maxCNTRval 0x3FF
 
 uint32_t select_sat_counter = maxCNTRval/2;
-uint32_t hysteresis = 0xF;
 uint32_t hysteresis_check = 0; 
 
 uint32_t shippp_misses = 0;

@@ -1,8 +1,11 @@
-replacement/lru/lru.o: replacement/lru/lru.cc inc/cache.h inc/champsim.h \
+replacement/set_duel_base/set_duel.o: \
+ replacement/set_duel_base/set_duel.cc inc/cache.h inc/champsim.h \
  inc/champsim_constants.h inc/util.h inc/delay_queue.hpp \
  inc/circular_buffer.hpp inc/memory_class.h inc/block.h inc/instruction.h \
  inc/ooo_cpu.h inc/operable.h inc/ooo_cpu_modules.inc \
- inc/cache_modules.inc inc/util.h
+ inc/cache_modules.inc \
+ replacement/set_duel_base/../hawkeye/hawkeye_predictor.h \
+ replacement/set_duel_base/../hawkeye/optgen.h
 
 inc/cache.h:
 
@@ -30,4 +33,6 @@ inc/ooo_cpu_modules.inc:
 
 inc/cache_modules.inc:
 
-inc/util.h:
+replacement/set_duel_base/../hawkeye/hawkeye_predictor.h:
+
+replacement/set_duel_base/../hawkeye/optgen.h:

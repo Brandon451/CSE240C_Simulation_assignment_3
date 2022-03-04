@@ -47,7 +47,8 @@ uint32_t ship_sample[LLC_SETS];
 uint32_t line_reuse[LLC_SETS][LLC_WAYS];
 uint64_t line_sig[LLC_SETS][LLC_WAYS];
 
-uint32_t hawkeye_sample[LLC_SETS];
+uint32_t hawkeye_sample_dip[LLC_SETS];
+uint32_t ship_sample_dip[LLC_SETS];
 
 // Hawkeye Predictors for demand and prefetch requests
 // Predictor with 2K entries and 5-bit counter per entry
@@ -91,7 +92,6 @@ vector<map<uint64_t, ADDR_INFO>> addr_history; // Sampler
 #define maxCNTRval 0x3FF
 
 uint32_t select_sat_counter = maxCNTRval/2;
-uint32_t hysteresis = 0xF;
 uint32_t hysteresis_check = 0; 
 
 uint32_t shippp_misses = 0;
@@ -115,7 +115,7 @@ void initialize_replacement_hawkeye()
         //cout << ((~i>>6) & 0x1F) << " " << (i & 0x1F) << endl;
         if (((i>>6) & 0x1F) == (i & 0x1F)) {
             //cout << "Hawkeye " << i << endl;
-            hawkeye_sample[i] = 1;
+            hawkeye_sample_dip[i] = 1;
         }
         //if (((~i>>6) & 0x1F) == (i & 0x1F))
             //cout << "Ship++ " << i << endl;
@@ -163,19 +163,19 @@ void initialize_replacement_shippp(uint32_t NUM_SET)
         //     hawkeye_sample[i] = 1;
         // }
         if (((~i>>6) & 0x1F) == (i & 0x1F)) {
-            ship_sample[i] = 1;
+            ship_sample_dip[i] = 1;
             //cout << "Ship++ " << i << endl;
         }
     }
 
-    // while (leaders < NUM_LEADER_SETS) {
-    //     int randval = rand() % NUM_SET;
+    while (leaders < NUM_LEADER_SETS) {
+        int randval = rand() % NUM_SET;
 
-    //     if (ship_sample[randval] == 0 && SAMPLED_SET(randval) == 0) {
-    //         ship_sample[randval] = 1;
-    //         leaders++;
-    //     }
-    // }
+        if (ship_sample[randval] == 0 && SAMPLED_SET(randval) == 0) {
+            ship_sample[randval] = 1;
+            leaders++;
+        }
+    }
 }
 
 uint32_t find_victim_hawkeye(uint32_t cpu, uint64_t instr_id, uint32_t set, const BLOCK* current_set, uint64_t PC, uint64_t paddr, uint32_t type)
@@ -200,8 +200,8 @@ uint32_t find_victim_hawkeye(uint32_t cpu, uint64_t instr_id, uint32_t set, cons
 
     assert(lru_victim != -1);
     // The predictor is trained negatively on LRU evictions
-    //if (SAMPLED_SET(set)) {
-    if (hawkeye_sample[set]) {
+    if (SAMPLED_SET(set)) {
+    // if (hawkeye_sample[set]) {
         if (prefetched[set][lru_victim])
             prefetch_predictor->decrement(signatures[set][lru_victim]);
         else
@@ -278,8 +278,8 @@ void update_replacement_state_hawkeye(uint32_t cpu, uint32_t set, uint32_t way, 
         return;
 
     // If we are sampling, OPTgen will only see accesses from sampled sets
-    //if (SAMPLED_SET(set)) {
-    if (hawkeye_sample[set]) {
+    if (SAMPLED_SET(set)) {
+    // if (hawkeye_sample[set]) {
         // The current timestep
         uint64_t curr_quanta = perset_mytimer[set] % OPTGEN_VECTOR_SIZE;
 
@@ -564,8 +564,8 @@ void CACHE::initialize_replacement() {
 
 uint32_t CACHE::find_victim(uint32_t cpu, uint64_t instr_id, uint32_t set, const BLOCK* current_set, uint64_t PC, uint64_t paddr, uint32_t type) {
     
-    if (hawkeye_sample[set] == 1) return find_victim_hawkeye(cpu, instr_id, set, current_set, PC, paddr, type);
-    else if (ship_sample[set] == 1) return find_victim_shippp(cpu, instr_id, set, current_set, PC, paddr, type);
+    if (hawkeye_sample_dip[set] == 1) return find_victim_hawkeye(cpu, instr_id, set, current_set, PC, paddr, type);
+    else if (ship_sample_dip[set] == 1) return find_victim_shippp(cpu, instr_id, set, current_set, PC, paddr, type);
     else {
         if (select_sat_counter < (maxCNTRval/2)) return find_victim_shippp(cpu, instr_id, set, current_set, PC, paddr, type);
         else return find_victim_hawkeye(cpu, instr_id, set, current_set, PC, paddr, type);
@@ -587,15 +587,15 @@ void CACHE::update_replacement_state(uint32_t cpu, uint32_t set, uint32_t way, u
     // if (!hawkeye_sample[set]) update_replacement_state_shippp(cpu, set, way, full_addr, ip, victim_addr, type, hit);
     // if (!ship_sample[set]) update_replacement_state_hawkeye(cpu, set, way, full_addr, ip, victim_addr, type, hit);
 
-    if (hawkeye_sample[set] == 1) update_replacement_state_hawkeye(cpu, set, way, full_addr, ip, victim_addr, type, hit);
-    else if (ship_sample[set] == 1) update_replacement_state_shippp(cpu, set, way, full_addr, ip, victim_addr, type, hit);
+    if (hawkeye_sample_dip[set] == 1) update_replacement_state_hawkeye(cpu, set, way, full_addr, ip, victim_addr, type, hit);
+    else if (ship_sample_dip[set] == 1) update_replacement_state_shippp(cpu, set, way, full_addr, ip, victim_addr, type, hit);
     else {
         if (select_sat_counter < (maxCNTRval/2)) update_replacement_state_shippp(cpu, set, way, full_addr, ip, victim_addr, type, hit);
         else update_replacement_state_hawkeye(cpu, set, way, full_addr, ip, victim_addr, type, hit);
     }
 
     if (hit == 0) {
-        if (hawkeye_sample[set] && select_sat_counter > 0) {
+        if (hawkeye_sample_dip[set] && select_sat_counter > 0) {
             select_sat_counter--;
             //if (select_sat_counter < (maxCNTRval/2) - hysteresis) hysteresis_check = 0;
         }
@@ -605,8 +605,8 @@ void CACHE::update_replacement_state(uint32_t cpu, uint32_t set, uint32_t way, u
         }
     }
 
-    if (!hit && hawkeye_sample[set]) hawkeye_misses++;
-    if (!hit && ship_sample[set]) shippp_misses++;
+    if (!hit && hawkeye_sample_dip[set]) hawkeye_misses++;
+    if (!hit && ship_sample_dip[set]) shippp_misses++;
 
     //std::cout << "Ship++ misses: " << shippp_misses << ", " << "Hawkeye misses: " << hawkeye_misses << ", " << "Counter: " << select_sat_counter << std::endl;
 }

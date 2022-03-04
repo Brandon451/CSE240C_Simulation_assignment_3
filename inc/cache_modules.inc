@@ -1,42 +1,42 @@
 enum class repl_t
 {
     rreplacementDlru,
-    rreplacementDship
+    rreplacementDset_duel_3
 };
 
-void repl_rreplacementDship_initialize();
 void repl_rreplacementDlru_initialize();
+void repl_rreplacementDset_duel_3_initialize();
 void impl_replacement_initialize()
 {
-    if (repl_type == repl_t::rreplacementDship) return repl_rreplacementDship_initialize();
     if (repl_type == repl_t::rreplacementDlru) return repl_rreplacementDlru_initialize();
+    if (repl_type == repl_t::rreplacementDset_duel_3) return repl_rreplacementDset_duel_3_initialize();
     throw std::invalid_argument("Replacement policy module not found");
 }
 
+uint32_t repl_rreplacementDset_duel_3_victim(uint32_t, uint64_t, uint32_t, const BLOCK*, uint64_t, uint64_t, uint32_t);
 uint32_t repl_rreplacementDlru_victim(uint32_t, uint64_t, uint32_t, const BLOCK*, uint64_t, uint64_t, uint32_t);
-uint32_t repl_rreplacementDship_victim(uint32_t, uint64_t, uint32_t, const BLOCK*, uint64_t, uint64_t, uint32_t);
 uint32_t impl_replacement_find_victim(uint32_t cpu, uint64_t instr_id, uint32_t set, const BLOCK* current_set, uint64_t ip, uint64_t full_addr, uint32_t type)
 {
+    if (repl_type == repl_t::rreplacementDset_duel_3) return repl_rreplacementDset_duel_3_victim(cpu, instr_id, set, current_set, ip, full_addr, type);
     if (repl_type == repl_t::rreplacementDlru) return repl_rreplacementDlru_victim(cpu, instr_id, set, current_set, ip, full_addr, type);
-    if (repl_type == repl_t::rreplacementDship) return repl_rreplacementDship_victim(cpu, instr_id, set, current_set, ip, full_addr, type);
     throw std::invalid_argument("Replacement policy module not found");
 }
 
 void repl_rreplacementDlru_update(uint32_t, uint32_t, uint32_t, uint64_t, uint64_t, uint64_t, uint32_t, uint8_t);
-void repl_rreplacementDship_update(uint32_t, uint32_t, uint32_t, uint64_t, uint64_t, uint64_t, uint32_t, uint8_t);
+void repl_rreplacementDset_duel_3_update(uint32_t, uint32_t, uint32_t, uint64_t, uint64_t, uint64_t, uint32_t, uint8_t);
 void impl_replacement_update_state(uint32_t cpu, uint32_t set, uint32_t way, uint64_t full_addr, uint64_t ip, uint64_t victim_addr, uint32_t type, uint8_t hit)
 {
     if (repl_type == repl_t::rreplacementDlru) return repl_rreplacementDlru_update(cpu, set, way, full_addr, ip, victim_addr, type, hit);
-    if (repl_type == repl_t::rreplacementDship) return repl_rreplacementDship_update(cpu, set, way, full_addr, ip, victim_addr, type, hit);
+    if (repl_type == repl_t::rreplacementDset_duel_3) return repl_rreplacementDset_duel_3_update(cpu, set, way, full_addr, ip, victim_addr, type, hit);
     throw std::invalid_argument("Replacement policy module not found");
 }
 
 void repl_rreplacementDlru_final_stats();
-void repl_rreplacementDship_final_stats();
+void repl_rreplacementDset_duel_3_final_stats();
 void impl_replacement_final_stats()
 {
     if (repl_type == repl_t::rreplacementDlru) return repl_rreplacementDlru_final_stats();
-    if (repl_type == repl_t::rreplacementDship) return repl_rreplacementDship_final_stats();
+    if (repl_type == repl_t::rreplacementDset_duel_3) return repl_rreplacementDset_duel_3_final_stats();
     throw std::invalid_argument("Replacement policy module not found");
 }
 
@@ -49,8 +49,8 @@ enum class pref_t
 void pref_pprefetcherDno_initialize();
 void impl_prefetcher_initialize()
 {
-    if (pref_type == pref_t::pprefetcherDno) return pref_pprefetcherDno_initialize();
     if (pref_type == pref_t::CPU_REDIRECT_pprefetcherDno_instr_) return ooo_cpu[cpu]->pref_pprefetcherDno_instr_initialize();
+    if (pref_type == pref_t::pprefetcherDno) return pref_pprefetcherDno_initialize();
     throw std::invalid_argument("Data prefetcher module not found");
 }
 

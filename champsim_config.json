@@ -145,7 +145,7 @@
     "virtual_prefetch": false,
     "prefetch_activate": "LOAD,PREFETCH",
     "prefetcher": "no",
-    "replacement": "ship"
+    "replacement": "set_duel_3"
   },
   "physical_memory": {
     "frequency": 3200,

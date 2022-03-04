@@ -19,8 +19,8 @@ clean:
 	 find . -name \*.d -delete
 	 $(RM) -r obj
 
-	 find replacement/ship -name \*.o -delete
-	 find replacement/ship -name \*.d -delete
+	 find replacement/set_duel_3 -name \*.o -delete
+	 find replacement/set_duel_3 -name \*.d -delete
 	 find prefetcher/no -name \*.o -delete
 	 find prefetcher/no -name \*.d -delete
 	 find replacement/lru -name \*.o -delete
@@ -32,13 +32,13 @@ clean:
 	 find btb/basic_btb -name \*.o -delete
 	 find btb/basic_btb -name \*.d -delete
 
-bin/champsim: $(patsubst %.cc,%.o,$(wildcard src/*.cc)) obj/repl_rreplacementDship.a obj/pref_pprefetcherDno.a obj/repl_rreplacementDlru.a obj/pref_pprefetcherDno_instr.a obj/bpred_bbranchDbimodal.a obj/btb_bbtbDbasic_btb.a
+bin/champsim: $(patsubst %.cc,%.o,$(wildcard src/*.cc)) obj/repl_rreplacementDset_duel_3.a obj/pref_pprefetcherDno.a obj/repl_rreplacementDlru.a obj/pref_pprefetcherDno_instr.a obj/bpred_bbranchDbimodal.a obj/btb_bbtbDbasic_btb.a
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-replacement/ship/%.o: CFLAGS += -Ireplacement/ship
-replacement/ship/%.o: CXXFLAGS += -Ireplacement/ship
-replacement/ship/%.o: CXXFLAGS +=  -Dinitialize_replacement=repl_rreplacementDship_initialize -Dfind_victim=repl_rreplacementDship_victim -Dupdate_replacement_state=repl_rreplacementDship_update -Dreplacement_final_stats=repl_rreplacementDship_final_stats
-obj/repl_rreplacementDship.a: $(patsubst %.cc,%.o,$(wildcard replacement/ship/*.cc)) $(patsubst %.c,%.o,$(wildcard replacement/ship/*.c))
+replacement/set_duel_3/%.o: CFLAGS += -Ireplacement/set_duel_3
+replacement/set_duel_3/%.o: CXXFLAGS += -Ireplacement/set_duel_3
+replacement/set_duel_3/%.o: CXXFLAGS +=  -Dinitialize_replacement=repl_rreplacementDset_duel_3_initialize -Dfind_victim=repl_rreplacementDset_duel_3_victim -Dupdate_replacement_state=repl_rreplacementDset_duel_3_update -Dreplacement_final_stats=repl_rreplacementDset_duel_3_final_stats
+obj/repl_rreplacementDset_duel_3.a: $(patsubst %.cc,%.o,$(wildcard replacement/set_duel_3/*.cc)) $(patsubst %.c,%.o,$(wildcard replacement/set_duel_3/*.c))
 	@mkdir -p $(dir $@)
 	ar -rcs $@ $^
 
@@ -78,7 +78,7 @@ obj/btb_bbtbDbasic_btb.a: $(patsubst %.cc,%.o,$(wildcard btb/basic_btb/*.cc)) $(
 	ar -rcs $@ $^
 
 -include $(wildcard src/*.d)
--include $(wildcard replacement/ship/*.d)
+-include $(wildcard replacement/set_duel_3/*.d)
 -include $(wildcard prefetcher/no/*.d)
 -include $(wildcard replacement/lru/*.d)
 -include $(wildcard prefetcher/no_instr/*.d)
