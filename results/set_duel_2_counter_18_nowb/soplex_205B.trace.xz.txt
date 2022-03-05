@@ -1,0 +1,30 @@
+
+*** ChampSim Multicore Out-of-Order Simulator ***
+
+Warmup Instructions: 50000000
+Simulation Instructions: 250000000
+Number of CPUs: 1
+Off-chip DRAM Size: 4 GiB Channels: 1 Width: 64-bit Data Rate: 3200 MT/s
+
+VirtualMemory physical capacity: 8588881920 num_ppages: 2096895
+VirtualMemory page size: 4096 log2_page_size: 12
+
+CPU 0 runs /datasets/cs240c-wi22-a00-public/data/Assignment2/soplex_205B.trace.xz
+CPU 0 Bimodal branch predictor
+Basic BTB sets: 1024 ways: 8 indirect buffer size: 4096 RAS size: 64
+Initialize Hawkeye state
+Initialize SRRIP state
+Heartbeat CPU 0 instructions: 10000002 cycles: 2865168 heartbeat IPC: 3.4902 cumulative IPC: 3.4902 (Simulation time: 0 hr 0 min 32 sec) 
+Heartbeat CPU 0 instructions: 20000001 cycles: 5981200 heartbeat IPC: 3.20921 cumulative IPC: 3.34381 (Simulation time: 0 hr 1 min 11 sec) 
+Heartbeat CPU 0 instructions: 30000001 cycles: 8839875 heartbeat IPC: 3.49812 cumulative IPC: 3.39371 (Simulation time: 0 hr 1 min 52 sec) 
+Heartbeat CPU 0 instructions: 40000002 cycles: 11754772 heartbeat IPC: 3.43065 cumulative IPC: 3.40287 (Simulation time: 0 hr 2 min 28 sec) 
+Heartbeat CPU 0 instructions: 50000002 cycles: 14616433 heartbeat IPC: 3.49447 cumulative IPC: 3.42081 (Simulation time: 0 hr 3 min 0 sec) 
+
+Warmup complete CPU 0 instructions: 50000002 cycles: 14616433 (Simulation time: 0 hr 3 min 0 sec) 
+
+Heartbeat CPU 0 instructions: 60000000 cycles: 41943271 heartbeat IPC: 0.365941 cumulative IPC: 0.365941 (Simulation time: 0 hr 4 min 29 sec) 
+Heartbeat CPU 0 instructions: 70000000 cycles: 72389075 heartbeat IPC: 0.328452 cumulative IPC: 0.346185 (Simulation time: 0 hr 6 min 12 sec) 
+Heartbeat CPU 0 instructions: 80000003 cycles: 100596206 heartbeat IPC: 0.35452 cumulative IPC: 0.348919 (Simulation time: 0 hr 7 min 39 sec) 
+Heartbeat CPU 0 instructions: 90000000 cycles: 131856463 heartbeat IPC: 0.319895 cumulative IPC: 0.34118 (Simulation time: 0 hr 9 min 24 sec) 
+Heartbeat CPU 0 instructions: 100000002 cycles: 158358995 heartbeat IPC: 0.377323 cumulative IPC: 0.347844 (Simulation time: 0 hr 10 min 45 sec) 
+Caught signal: 2

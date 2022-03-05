@@ -1,0 +1,2 @@
+Mean IPC for the run: 0.849811815909508
+Mean MPKI for the run: 12.61544638554217
